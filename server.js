@@ -16,7 +16,7 @@ async function startServer() {
   const uri = mongod.getUri(); // دریافت آدرس اتصال
 
   // اتصال به MongoDB درون‌حافظه‌ای
-  mongoose.connect(uri, {
+  await mongoose.connect(uri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   });
