@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const path = require('path'); // اضافه کردن ماژول path
 
 dotenv.config();
 
@@ -40,9 +41,12 @@ UserSchema.pre('save', async function (next) {
 
 const User = mongoose.model('User', UserSchema);
 
+// ارسال فایل‌های استاتیک (مانند index.html)
+app.use(express.static(path.join(__dirname, 'public'))); // فایل‌های استاتیک در پوشه public قرار دارند
+
 // روت‌ها
 app.get('/', (req, res) => {
-  res.send('خوش آمدید به پلتفرم املاک Allnik!');
+  res.sendFile(path.join(__dirname, 'public', 'index.html')); // ارسال فایل index.html
 });
 
 app.post('/api/auth/register', async (req, res) => {
