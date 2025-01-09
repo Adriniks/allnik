@@ -9,9 +9,8 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// اتصال به دیتابیس MongoDB (استفاده از MongoDB Atlas)
-const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/allnik"; // استفاده از متغیر محیطی برای اتصال
-mongoose.connect(mongoURI, {
+// اتصال به دیتابیس MongoDB
+mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/allnik", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
