@@ -96,6 +96,6 @@ app.post("/accept-request", async (req, res) => {
 });
 
 // شروع سرور
-app.listen(3000, () => {
-  console.log("Server is running on http://localhost:3000");
+app.listen(1000, () => {
+  console.log("Server is running on http://localhost:1000");
 });
