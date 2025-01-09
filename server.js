@@ -1,6 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs"); // استفاده از bcryptjs به جای bcrypt
 const jwt = require("jsonwebtoken");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -9,14 +9,11 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// تنظیمات اتصال به دیتابیس MongoDB
-const mongoURI = process.env.MONGODB_URI || "mongodb://localhost:27017/allnik"; // استفاده از متغیر محیطی برای اتصال به دیتابیس
-mongoose.connect(mongoURI, {
+// اتصال به دیتابیس MongoDB
+mongoose.connect("mongodb://localhost:27017/allnik", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-})
-.then(() => console.log("Connected to MongoDB"))
-.catch((err) => console.error("Could not connect to MongoDB", err));
+});
 
 // مدل‌های دیتابیس
 const UserSchema = new mongoose.Schema({
@@ -38,7 +35,7 @@ const Request = mongoose.model("Request", RequestSchema);
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10); // استفاده از bcryptjs
     const user = new User({ name, email, password: hashedPassword });
     await user.save();
     res.status(201).send("User registered successfully");
@@ -52,7 +49,7 @@ app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (!user) return res.status(404).send("User not found");
-  const isMatch = await bcrypt.compare(password, user.password);
+  const isMatch = await bcrypt.compare(password, user.password); // استفاده از bcryptjs
   if (!isMatch) return res.status(400).send("Invalid credentials");
 
   const token = jwt.sign({ userId: user._id, role: user.role }, "secret_key");
@@ -98,14 +95,7 @@ app.post("/accept-request", async (req, res) => {
   }
 });
 
-// مدیریت خطاهای ناشناخته
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send("Something went wrong!");
-});
-
 // شروع سرور
-const PORT = process.env.PORT || 3000; // استفاده از پورت تعیین‌شده توسط محیط یا پورت 3000 به‌عنوان پیش‌فرض
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(3000, () => {
+  console.log("Server is running on http://localhost:3000");
 });
