@@ -1,6 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs"); // استفاده از bcryptjs به جای bcrypt
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -9,8 +9,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// اتصال به دیتابیس MongoDB
-mongoose.connect("mongodb://localhost:27017/allnik", {
+// اتصال به دیتابیس MongoDB (استفاده از MongoDB Atlas)
+const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/allnik"; // استفاده از متغیر محیطی برای اتصال
+mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
@@ -35,7 +36,7 @@ const Request = mongoose.model("Request", RequestSchema);
 app.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 10); // استفاده از bcryptjs
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ name, email, password: hashedPassword });
     await user.save();
     res.status(201).send("User registered successfully");
@@ -49,7 +50,7 @@ app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (!user) return res.status(404).send("User not found");
-  const isMatch = await bcrypt.compare(password, user.password); // استفاده از bcryptjs
+  const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(400).send("Invalid credentials");
 
   const token = jwt.sign({ userId: user._id, role: user.role }, "secret_key");
@@ -96,6 +97,7 @@ app.post("/accept-request", async (req, res) => {
 });
 
 // شروع سرور
-app.listen(1000, () => {
-  console.log("Server is running on http://localhost:1000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
