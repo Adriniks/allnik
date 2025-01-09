@@ -33,6 +33,21 @@ const UserSchema = new mongoose.Schema({
   workRegion: { type: String },
 });
 
+const RequestSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  advisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  requestType: { type: String, enum: ['rent', 'buy', 'pre-buy', 'partnership'], required: true },
+  area: { type: Number, required: true },
+  location: { type: String, required: true },
+  bedrooms: { type: Number, required: true },
+  style: { type: String },
+  budget: { type: Number, required: true },
+  paymentConditions: { type: String },
+  description: { type: String },
+  status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
+  createdAt: { type: Date, default: Date.now },
+});
+
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 10);
@@ -40,8 +55,25 @@ UserSchema.pre('save', async function (next) {
 });
 
 const User = mongoose.model('User', UserSchema);
+const Request = mongoose.model('Request', RequestSchema);
+
+// Middleware برای احراز هویت
+const authMiddleware = (req, res, next) => {
+  const token = req.header('x-auth-token');
+  if (!token) return res.status(401).json({ msg: 'No token, authorization denied' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ msg: 'Token is not valid' });
+  }
+};
 
 // روت‌های API
+
+// ثبت‌نام کاربر
 app.post('/api/auth/register', async (req, res) => {
   const { fullName, email, username, password, city, region, userType, expertise, workRegion } = req.body;
 
@@ -73,6 +105,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// ورود کاربر
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -87,6 +120,92 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     res.json({ token });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// ایجاد درخواست جدید
+app.post('/api/requests', authMiddleware, async (req, res) => {
+  const { requestType, area, location, bedrooms, style, budget, paymentConditions, description } = req.body;
+
+  try {
+    const newRequest = new Request({
+      userId: req.user.userId,
+      requestType,
+      area,
+      location,
+      bedrooms,
+      style,
+      budget,
+      paymentConditions,
+      description,
+    });
+
+    await newRequest.save();
+
+    res.status(201).json(newRequest);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// دریافت درخواست‌های کاربر
+app.get('/api/requests/user', authMiddleware, async (req, res) => {
+  try {
+    const requests = await Request.find({ userId: req.user.userId });
+    res.json(requests);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// دریافت درخواست‌های مشاور
+app.get('/api/requests/advisor', authMiddleware, async (req, res) => {
+  try {
+    const advisor = await User.findById(req.user.userId);
+    if (!advisor || advisor.userType !== 'advisor') {
+      return res.status(403).json({ msg: 'Access denied' });
+    }
+
+    const requests = await Request.find({ location: advisor.workRegion, status: 'pending' });
+    res.json(requests);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// تغییر وضعیت درخواست
+app.put('/api/requests/:id', authMiddleware, async (req, res) => {
+  const { status } = req.body;
+
+  try {
+    const request = await Request.findById(req.params.id);
+    if (!request) return res.status(404).json({ msg: 'Request not found' });
+
+    request.status = status;
+    await request.save();
+
+    res.json(request);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// حذف درخواست
+app.delete('/api/requests/:id', authMiddleware, async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.id);
+    if (!request) return res.status(404).json({ msg: 'Request not found' });
+
+    await request.remove();
+
+    res.json({ msg: 'Request removed' });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');
