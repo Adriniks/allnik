@@ -9,11 +9,14 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// اتصال به دیتابیس MongoDB
-mongoose.connect(process.env.MONGO_URI || "mongodb://localhost:27017/allnik", {
+// اتصال به MongoDB Atlas
+const mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/allnik?retryWrites=true&w=majority";
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-});
+})
+.then(() => console.log("Connected to MongoDB Atlas"))
+.catch(err => console.error("Could not connect to MongoDB Atlas", err));
 
 // مدل‌های دیتابیس
 const UserSchema = new mongoose.Schema({
