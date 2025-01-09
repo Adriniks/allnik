@@ -9,11 +9,14 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// اتصال به دیتابیس MongoDB
-mongoose.connect("mongodb://localhost:27017/allnik", {
+// تنظیمات اتصال به دیتابیس MongoDB
+const mongoURI = process.env.MONGODB_URI || "mongodb://localhost:27017/allnik"; // استفاده از متغیر محیطی برای اتصال به دیتابیس
+mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-});
+})
+.then(() => console.log("Connected to MongoDB"))
+.catch((err) => console.error("Could not connect to MongoDB", err));
 
 // مدل‌های دیتابیس
 const UserSchema = new mongoose.Schema({
@@ -95,7 +98,14 @@ app.post("/accept-request", async (req, res) => {
   }
 });
 
+// مدیریت خطاهای ناشناخته
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send("Something went wrong!");
+});
+
 // شروع سرور
-app.listen(1000, () => {
-  console.log("Server is running on http://localhost:1000");
+const PORT = process.env.PORT || 3000; // استفاده از پورت تعیین‌شده توسط محیط یا پورت 3000 به‌عنوان پیش‌فرض
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
