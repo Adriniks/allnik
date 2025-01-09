@@ -1,225 +1,101 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const dotenv = require('dotenv');
-const cors = require('cors');
-const path = require('path');
-
-dotenv.config();
+const express = require("express");
+const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const bodyParser = require("body-parser");
+const cors = require("cors");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// اتصال به MongoDB
-mongoose.connect(process.env.MONGO_URI, {
+// اتصال به دیتابیس MongoDB
+mongoose.connect("mongodb://localhost:27017/allnik", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB Connected'))
-.catch(err => console.error(err));
+});
 
-// اسکیما و مدل‌ها
+// مدل‌های دیتابیس
 const UserSchema = new mongoose.Schema({
-  fullName: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  city: { type: String, required: true },
-  region: { type: String, required: true },
-  userType: { type: String, enum: ['user', 'advisor', 'admin'], default: 'user' },
-  expertise: { type: String },
-  workRegion: { type: String },
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
+  role: { type: String, default: "user" }, // "user" یا "advisor"
 });
-
 const RequestSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  advisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  requestType: { type: String, enum: ['rent', 'buy', 'pre-buy', 'partnership'], required: true },
-  area: { type: Number, required: true },
-  location: { type: String, required: true },
-  bedrooms: { type: Number, required: true },
-  style: { type: String },
-  budget: { type: Number, required: true },
-  paymentConditions: { type: String },
-  description: { type: String },
-  status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
-  createdAt: { type: Date, default: Date.now },
+  userId: mongoose.Schema.Types.ObjectId,
+  description: String,
+  status: { type: String, default: "active" }, // "active" یا "accepted"
+  advisorId: mongoose.Schema.Types.ObjectId,
 });
+const User = mongoose.model("User", UserSchema);
+const Request = mongoose.model("Request", RequestSchema);
 
-UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
-
-const User = mongoose.model('User', UserSchema);
-const Request = mongoose.model('Request', RequestSchema);
-
-// Middleware برای احراز هویت
-const authMiddleware = (req, res, next) => {
-  const token = req.header('x-auth-token');
-  if (!token) return res.status(401).json({ msg: 'No token, authorization denied' });
-
+// ثبت‌نام
+app.post("/register", async (req, res) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ msg: 'Token is not valid' });
-  }
-};
-
-// روت‌های API
-
-// ثبت‌نام کاربر
-app.post('/api/auth/register', async (req, res) => {
-  const { fullName, email, username, password, city, region, userType, expertise, workRegion } = req.body;
-
-  try {
-    let user = await User.findOne({ email });
-    if (user) return res.status(400).json({ msg: 'User already exists' });
-
-    user = new User({
-      fullName,
-      email,
-      username,
-      password,
-      city,
-      region,
-      userType,
-      expertise,
-      workRegion,
-    });
-
+    const { name, email, password } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ name, email, password: hashedPassword });
     await user.save();
-
-    const payload = { userId: user.id, userType: user.userType };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    res.status(201).json({ token });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
+    res.status(201).send("User registered successfully");
+  } catch (error) {
+    res.status(400).send("Error: " + error.message);
   }
 });
 
-// ورود کاربر
-app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
+// ورود
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(404).send("User not found");
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(400).send("Invalid credentials");
 
-  try {
-    const user = await User.findOne({ username });
-    if (!user) return res.status(400).json({ msg: 'Invalid credentials' });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' });
-
-    const payload = { userId: user.id, userType: user.userType };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    res.json({ token });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
+  const token = jwt.sign({ userId: user._id, role: user.role }, "secret_key");
+  res.status(200).json({ token });
 });
 
-// ایجاد درخواست جدید
-app.post('/api/requests', authMiddleware, async (req, res) => {
-  const { requestType, area, location, bedrooms, style, budget, paymentConditions, description } = req.body;
-
+// ثبت درخواست
+app.post("/create-request", async (req, res) => {
+  const { token, description } = req.body;
   try {
-    const newRequest = new Request({
-      userId: req.user.userId,
-      requestType,
-      area,
-      location,
-      bedrooms,
-      style,
-      budget,
-      paymentConditions,
-      description,
-    });
-
-    await newRequest.save();
-
-    res.status(201).json(newRequest);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
-});
-
-// دریافت درخواست‌های کاربر
-app.get('/api/requests/user', authMiddleware, async (req, res) => {
-  try {
-    const requests = await Request.find({ userId: req.user.userId });
-    res.json(requests);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
-});
-
-// دریافت درخواست‌های مشاور
-app.get('/api/requests/advisor', authMiddleware, async (req, res) => {
-  try {
-    const advisor = await User.findById(req.user.userId);
-    if (!advisor || advisor.userType !== 'advisor') {
-      return res.status(403).json({ msg: 'Access denied' });
-    }
-
-    const requests = await Request.find({ location: advisor.workRegion, status: 'pending' });
-    res.json(requests);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
-});
-
-// تغییر وضعیت درخواست
-app.put('/api/requests/:id', authMiddleware, async (req, res) => {
-  const { status } = req.body;
-
-  try {
-    const request = await Request.findById(req.params.id);
-    if (!request) return res.status(404).json({ msg: 'Request not found' });
-
-    request.status = status;
+    const decoded = jwt.verify(token, "secret_key");
+    const request = new Request({ userId: decoded.userId, description });
     await request.save();
-
-    res.json(request);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
+    res.status(201).send("Request created successfully");
+  } catch (error) {
+    res.status(401).send("Unauthorized");
   }
 });
 
-// حذف درخواست
-app.delete('/api/requests/:id', authMiddleware, async (req, res) => {
+// نمایش درخواست‌های فعال
+app.get("/active-requests", async (req, res) => {
+  const requests = await Request.find({ status: "active" }).populate("userId");
+  res.status(200).json(requests);
+});
+
+// پذیرش درخواست توسط مشاور
+app.post("/accept-request", async (req, res) => {
+  const { token, requestId } = req.body;
   try {
-    const request = await Request.findById(req.params.id);
-    if (!request) return res.status(404).json({ msg: 'Request not found' });
+    const decoded = jwt.verify(token, "secret_key");
+    if (decoded.role !== "advisor")
+      return res.status(403).send("Only advisors can accept requests");
 
-    await request.remove();
+    const request = await Request.findById(requestId);
+    if (!request) return res.status(404).send("Request not found");
 
-    res.json({ msg: 'Request removed' });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
+    request.status = "accepted";
+    request.advisorId = decoded.userId;
+    await request.save();
+    res.status(200).send("Request accepted successfully");
+  } catch (error) {
+    res.status(401).send("Unauthorized");
   }
-});
-
-// سرویس فایل‌های استاتیک (فرانت‌اند)
-app.use(express.static(path.join(__dirname)));
-
-// روت اصلی برای فرانت‌اند
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // شروع سرور
-const PORT = process.env.PORT || 10000; // استفاده از پورت پیش‌فرض Render
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(1000, () => {
+  console.log("Server is running on http://localhost:1000");
+});
