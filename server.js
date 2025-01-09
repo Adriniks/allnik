@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const cors = require('cors');
-const path = require('path'); // اضافه کردن ماژول path
+const path = require('path');
 
 dotenv.config();
 
@@ -41,14 +41,7 @@ UserSchema.pre('save', async function (next) {
 
 const User = mongoose.model('User', UserSchema);
 
-// ارسال فایل‌های استاتیک (مانند index.html)
-app.use(express.static(path.join(__dirname, 'public'))); // فایل‌های استاتیک در پوشه public قرار دارند
-
-// روت‌ها
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html')); // ارسال فایل index.html
-});
-
+// روت‌های API
 app.post('/api/auth/register', async (req, res) => {
   const { fullName, email, username, password, city, region, userType, expertise, workRegion } = req.body;
 
@@ -98,6 +91,14 @@ app.post('/api/auth/login', async (req, res) => {
     console.error(err.message);
     res.status(500).send('Server error');
   }
+});
+
+// سرویس فایل‌های استاتیک (فرانت‌اند)
+app.use(express.static(path.join(__dirname)));
+
+// روت اصلی برای فرانت‌اند
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // شروع سرور
