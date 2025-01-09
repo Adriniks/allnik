@@ -1,4 +1,5 @@
 const express = require("express");
+const { MongoMemoryServer } = require("mongodb-memory-server"); // MongoDB درون‌حافظه‌ای
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -9,14 +10,19 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// اتصال به MongoDB Atlas
-const mongoUri = "mongodb+srv://<username>:<password>@cluster0.mongodb.net/allnik?retryWrites=true&w=majority";
-mongoose.connect(mongoUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log("Connected to MongoDB Atlas"))
-.catch(err => console.error("Could not connect to MongoDB Atlas", err));
+// راه‌اندازی MongoDB درون‌حافظه‌ای
+async function startServer() {
+  const mongod = await MongoMemoryServer.create(); // ایجاد یک نمونه از MongoDB درون‌حافظه‌ای
+  const uri = mongod.getUri(); // دریافت آدرس اتصال
+
+  // اتصال به MongoDB درون‌حافظه‌ای
+  mongoose.connect(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  });
+
+  console.log("Connected to in-memory MongoDB");
+}
 
 // مدل‌های دیتابیس
 const UserSchema = new mongoose.Schema({
@@ -100,6 +106,7 @@ app.post("/accept-request", async (req, res) => {
 
 // شروع سرور
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await startServer(); // راه‌اندازی MongoDB درون‌حافظه‌ای
   console.log(`Server is running on http://localhost:${PORT}`);
 });
